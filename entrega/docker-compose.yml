@@ -1,0 +1,98 @@
+version: "3.9"
+
+x-common-env: &common-env
+  JWT_SECRET: supersecret_jwt_key_2024
+
+services:
+
+  users:
+    build: ./users
+    container_name: users_service
+    ports:
+      - "5001:5001"
+    environment:
+      <<: *common-env
+      PORT: "5001"
+    volumes:
+      - users_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 10s
+      retries: 3
+
+  products_primary:
+    build: ./products
+    container_name: products_primary
+    ports:
+      - "5002:5002"
+    environment:
+      <<: *common-env
+      PORT: "5002"
+      IS_PRIMARY: "true"
+      REPLICA_URL: "http://products_replica:5012"
+    volumes:
+      - products_primary_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 10s
+      retries: 3
+
+  products_replica:
+    build: ./products
+    container_name: products_replica
+    ports:
+      - "5012:5012"
+    environment:
+      <<: *common-env
+      PORT: "5012"
+      IS_PRIMARY: "false"
+      REPLICA_URL: ""
+    volumes:
+      - products_replica_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5012/health"]
+      interval: 10s
+      retries: 3
+
+  orders:
+    build: ./orders
+    container_name: orders_service
+    ports:
+      - "5003:5003"
+    environment:
+      <<: *common-env
+      PORT: "5003"
+      USERS_URL: "http://users:5001"
+      PRODUCTS_URL: "http://products_primary:5002"
+    volumes:
+      - orders_data:/app/data
+    depends_on:
+      - users
+      - products_primary
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5003/health"]
+      interval: 10s
+      retries: 3
+
+  gateway:
+    build: ./gateway
+    container_name: api_gateway
+    ports:
+      - "5000:5000"
+    environment:
+      USERS_URL: "http://users:5001"
+      PRODUCTS_PRIMARY_URL: "http://products_primary:5002"
+      PRODUCTS_REPLICA_URL: "http://products_replica:5012"
+      ORDERS_URL: "http://orders:5003"
+      HEARTBEAT_INTERVAL: "5"
+    depends_on:
+      - users
+      - products_primary
+      - products_replica
+      - orders
+
+volumes:
+  users_data:
+  products_primary_data:
+  products_replica_data:
+  orders_data:
