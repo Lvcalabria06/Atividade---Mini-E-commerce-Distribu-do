@@ -3,7 +3,7 @@ import os, json, uuid, time, sys, logging
 logger = logging.getLogger("products")
 from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Header, Depends
+from fastapi import FastAPI, HTTPException, Header, Depends, Body
 from pydantic import BaseModel
 import jwt
 import httpx
@@ -137,7 +137,7 @@ def internal_replicate(product: dict):
 
 # Internal endpoint — full sync after replica recovery
 @app.post("/internal/sync", include_in_schema=False)
-def internal_sync(products: list):
+def internal_sync(products: list = Body(...)):
     db = load_db()
     db["products"] = {p["id"]: p for p in products}
     save_db(db)

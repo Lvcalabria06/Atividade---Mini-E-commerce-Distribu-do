@@ -4,6 +4,12 @@ x-common-env: &common-env
   JWT_SECRET: supersecret_jwt_key_2024
   SERVICE_TOKEN: internal_service_secret_2024
 
+x-healthcheck: &py-healthcheck
+  interval: 10s
+  timeout: 5s
+  retries: 3
+  start_period: 5s
+
 services:
 
   users:
@@ -17,9 +23,8 @@ services:
     volumes:
       - users_data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
-      interval: 10s
-      retries: 3
+      <<: *py-healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')"]
 
   products_primary:
     build: ./products
@@ -34,9 +39,8 @@ services:
     volumes:
       - products_primary_data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
-      interval: 10s
-      retries: 3
+      <<: *py-healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5002/health')"]
 
   products_replica:
     build: ./products
@@ -51,9 +55,8 @@ services:
     volumes:
       - products_replica_data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5012/health"]
-      interval: 10s
-      retries: 3
+      <<: *py-healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5012/health')"]
 
   orders:
     build: ./orders
@@ -71,9 +74,8 @@ services:
       - users
       - products_primary
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5003/health"]
-      interval: 10s
-      retries: 3
+      <<: *py-healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5003/health')"]
 
   gateway:
     build: ./gateway
