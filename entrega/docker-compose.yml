@@ -2,6 +2,7 @@ version: "3.9"
 
 x-common-env: &common-env
   JWT_SECRET: supersecret_jwt_key_2024
+  SERVICE_TOKEN: internal_service_secret_2024
 
 services:
 
@@ -80,6 +81,7 @@ services:
     ports:
       - "5000:5000"
     environment:
+      <<: *common-env
       USERS_URL: "http://users:5001"
       PRODUCTS_PRIMARY_URL: "http://products_primary:5002"
       PRODUCTS_REPLICA_URL: "http://products_replica:5012"

@@ -48,15 +48,33 @@ def products_read_url() -> str:
 app = FastAPI(title="API Gateway")
 
 
+async def sync_replica():
+    """Push all products from primary to replica after recovery."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(f"{PRODUCTS_PRIMARY_URL}/products")
+            r.raise_for_status()
+            products = r.json()
+            await client.post(f"{PRODUCTS_REPLICA_URL}/internal/sync", json=products)
+        logger.info("REPLICA SYNCED     | %d products pushed to replica | %s",
+                    len(products), datetime.now(timezone.utc).isoformat())
+    except Exception as e:
+        logger.error("REPLICA SYNC FAILED| %s", e)
+
+
 async def check_service(name: str, info: dict):
     url = info["url"]
+    was_healthy = info["healthy"]
     try:
         async with httpx.AsyncClient(timeout=HEARTBEAT_TIMEOUT) as client:
             r = await client.get(f"{url}/health")
             r.raise_for_status()
-        if not info["healthy"]:
+        if not was_healthy:
             logger.info("SERVICE RECOVERED  | %s at %s | %s", name, url,
                         datetime.now(timezone.utc).isoformat())
+            # Sync replica data after recovery
+            if name == "products_replica":
+                asyncio.create_task(sync_replica())
         info["healthy"] = True
         info["failures"] = 0
     except Exception:

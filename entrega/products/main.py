@@ -1,4 +1,6 @@
-import os, json, uuid, time, sys
+import os, json, uuid, time, sys, logging
+
+logger = logging.getLogger("products")
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Header, Depends
@@ -7,6 +9,7 @@ import jwt
 import httpx
 
 SECRET_KEY = os.getenv("JWT_SECRET", "supersecret_jwt_key_2024")
+SERVICE_TOKEN = os.getenv("SERVICE_TOKEN", "internal_service_secret_2024")
 ALGORITHM = "HS256"
 
 # Each replica uses its own DB file, determined by PORT env var
@@ -31,8 +34,13 @@ def save_db(db: dict):
 
 
 def verify_token(authorization: str = Header(None)) -> dict:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing token")
+    # Accept internal service-to-service token
+    if authorization == f"Service {SERVICE_TOKEN}":
+        return {"userId": "service", "role": "service"}
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
     token = authorization.split(" ", 1)[1]
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -118,10 +126,20 @@ async def update_product(product_id: str, req: ProductRequest, payload: dict = D
     return product
 
 
-# Internal endpoint — receives replication writes from primary
+# Internal endpoint — receives single replication write from primary
 @app.post("/internal/products", status_code=201, include_in_schema=False)
 def internal_replicate(product: dict):
     db = load_db()
     db["products"][product["id"]] = product
     save_db(db)
     return {"replicated": True}
+
+
+# Internal endpoint — full sync after replica recovery
+@app.post("/internal/sync", include_in_schema=False)
+def internal_sync(products: list):
+    db = load_db()
+    db["products"] = {p["id"]: p for p in products}
+    save_db(db)
+    logger.info("Full sync received: %d products", len(products))
+    return {"synced": len(products)}

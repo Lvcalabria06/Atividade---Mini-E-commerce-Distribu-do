@@ -7,11 +7,15 @@ import jwt
 import httpx
 
 SECRET_KEY = os.getenv("JWT_SECRET", "supersecret_jwt_key_2024")
+SERVICE_TOKEN = os.getenv("SERVICE_TOKEN", "internal_service_secret_2024")
 ALGORITHM = "HS256"
 DB_FILE = Path("orders_db.json")
 
 USERS_URL = os.getenv("USERS_URL", "http://localhost:5001")
 PRODUCTS_URL = os.getenv("PRODUCTS_URL", "http://localhost:5002")
+
+# Header used for internal service-to-service calls
+INTERNAL_HEADERS = {"Authorization": f"Service {SERVICE_TOKEN}"}
 
 app = FastAPI(title="Orders Service")
 
@@ -57,7 +61,10 @@ async def create_order(req: OrderRequest, payload: dict = Depends(verify_token))
     async with httpx.AsyncClient(timeout=5.0) as client:
         # Validate product exists
         try:
-            r = await client.get(f"{PRODUCTS_URL}/products/{req.productId}")
+            r = await client.get(
+                f"{PRODUCTS_URL}/products/{req.productId}",
+                headers=INTERNAL_HEADERS,
+            )
             if r.status_code == 404:
                 raise HTTPException(status_code=404, detail="Product not found")
             r.raise_for_status()
